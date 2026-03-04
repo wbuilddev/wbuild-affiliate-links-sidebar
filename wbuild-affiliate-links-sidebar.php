@@ -205,7 +205,7 @@ function wbuild_als_settings_page() {
                 <tr>
                     <th scope="row">
                         <?php esc_html_e( 'Link Prefix', 'wbuild-affiliate-links-sidebar' ); ?>
-                        <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener noreferrer" class="dashicons dashicons-info" title="<?php esc_attr_e( 'Want to support multiple affiliate programs (e.g., Amazon + ShareASale)? Check out Pro for multiple prefixes.', 'wbuild-affiliate-links-sidebar' ); ?>"></a>
+                        <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener" class="dashicons dashicons-info" title="<?php esc_attr_e( 'Want to support multiple affiliate programs (e.g., Amazon + ShareASale)? Check out Pro for multiple prefixes.', 'wbuild-affiliate-links-sidebar' ); ?>"></a>
                     </th>
                     <td>
                         <input type="text" name="prefix" value="<?php echo esc_attr( $settings['prefix'] ); ?>" class="regular-text">
@@ -226,7 +226,7 @@ function wbuild_als_settings_page() {
                         <input type="text" name="widget_title" value="<?php echo esc_attr( $settings['widget_title'] ); ?>" class="regular-text">
                         <p class="description">
                             <?php esc_html_e( 'Title shown above the list in the sidebar widget.', 'wbuild-affiliate-links-sidebar' ); ?><br>
-                            <a href="<?php echo esc_url( admin_url( 'widgets.php' ) ); ?>" target="_blank"><?php esc_html_e( 'Add the widget here → Appearance → Widgets', 'wbuild-affiliate-links-sidebar' ); ?></a>
+                            <a href="<?php echo esc_url( admin_url( 'widgets.php' ) ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Add the widget here → Appearance → Widgets', 'wbuild-affiliate-links-sidebar' ); ?></a>
                         </p>
                     </td>
                 </tr>
@@ -332,7 +332,7 @@ function wbuild_als_settings_page() {
             <h2><?php esc_html_e( 'Like this plugin?', 'wbuild-affiliate-links-sidebar' ); ?></h2>
             <p style="font-size: 1.1em;">
                 <?php esc_html_e( 'The Pro version adds unlimited links, multiple affiliate programs, and more custom behaviors.', 'wbuild-affiliate-links-sidebar' ); ?><br>
-                <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'View Pro details →', 'wbuild-affiliate-links-sidebar' ); ?></a>
+                <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener"><?php esc_html_e( 'View Pro details →', 'wbuild-affiliate-links-sidebar' ); ?></a>
             </p>
 
             <?php submit_button( __( 'Save Settings', 'wbuild-affiliate-links-sidebar' ), 'primary', 'wbuild_als_submit' ); ?>
@@ -420,7 +420,7 @@ class WBuild_Affiliate_Links_Widget extends WP_Widget {
             echo '<p class="affiliate-disclosure">' . wp_kses_post( $settings['disclosure'] ) . '</p>';
         }
         if ( in_array( $settings['credit_location'] ?? 'none', array( 'sidebar', 'both' ), true ) ) {
-            echo '<p class="wbuild-als-credit">' . wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener noreferrer">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ) . '</p>';
+            echo '<p class="wbuild-als-credit">' . wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ) . '</p>';
         }
         echo '</div>';
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
@@ -548,7 +548,7 @@ function wbuild_als_shortcode() {
             <p class="affiliate-disclosure"><?php echo wp_kses_post( $settings['disclosure'] ); ?></p>
         <?php endif; ?>
         <?php if ( in_array( $settings['credit_location'] ?? 'none', array( 'shortcode', 'both' ), true ) ) : ?>
-            <p class="wbuild-als-credit"><?php echo wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener noreferrer">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ); ?></p>
+            <p class="wbuild-als-credit"><?php echo wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ); ?></p>
         <?php endif; ?>
     </div>
     <?php
