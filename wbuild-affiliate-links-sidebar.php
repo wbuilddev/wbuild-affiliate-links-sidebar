@@ -2,7 +2,7 @@
 /**
  * Plugin Name: wBuild Affiliate Links Sidebar
  * Description: Auto-detects affiliate links in your content and displays them in a sidebar widget or shortcode.
- * Version: 1.7.0
+ * Version: 1.7.1
  * Author: wBuild.dev
  * Author URI: https://wbuild.dev
  * License: GPL-2.0+
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WBUILD_ALS_VERSION', '1.7.0' );
+define( 'WBUILD_ALS_VERSION', '1.7.1' );
 
 // ============================================================
 // SETTINGS LINK ON PLUGINS PAGE
@@ -154,22 +154,21 @@ function wbuild_als_add_settings_page() {
 
 function wbuild_als_settings_page() {
     if ( isset( $_POST['wbuild_als_submit'] ) && check_admin_referer( 'wbuild_als_settings_nonce' ) ) {
-        $input = wp_unslash( $_POST );
 
         $settings = array(
-            'prefix'                    => esc_url_raw( trim( $input['prefix'] ?? 'https://amzn.to/' ) ),
-            'sidebar_css'               => trim( $input['sidebar_css'] ?? '' ),
-            'shortcode_css'             => trim( $input['shortcode_css'] ?? '' ),
-            'widget_title'              => sanitize_text_field( $input['widget_title'] ?? 'Recommended Products on Page' ),
-            'shortcode_title'           => sanitize_text_field( $input['shortcode_title'] ?? 'Recommended Products on Page' ),
-            'disclosure'                => wp_kses_post( $input['disclosure'] ?? '' ),
-            'credit_location'           => sanitize_text_field( $input['credit_location'] ?? 'none' ),
-            'hide_shortcode_on_desktop' => isset( $input['hide_shortcode_on_desktop'] ) ? 1 : 0,
-            'link_new_tab'              => isset( $input['link_new_tab'] ) ? 1 : 0,
-            'link_rel_sponsored'        => isset( $input['link_rel_sponsored'] ) ? 1 : 0,
-            'link_rel_nofollow'         => isset( $input['link_rel_nofollow'] ) ? 1 : 0,
-            'link_rel_noopener'         => isset( $input['link_rel_noopener'] ) ? 1 : 0,
-            'max_links_display'         => max( 1, min( 5, (int) ( $input['max_links_display'] ?? 5 ) ) ),
+            'prefix'                    => esc_url_raw( trim( sanitize_url( wp_unslash( $_POST['prefix'] ?? 'https://amzn.to/' ) ) ) ),
+            'sidebar_css'               => wp_strip_all_tags( wp_unslash( $_POST['sidebar_css'] ?? '' ) ),
+            'shortcode_css'             => wp_strip_all_tags( wp_unslash( $_POST['shortcode_css'] ?? '' ) ),
+            'widget_title'              => sanitize_text_field( wp_unslash( $_POST['widget_title'] ?? 'Recommended Products on Page' ) ),
+            'shortcode_title'           => sanitize_text_field( wp_unslash( $_POST['shortcode_title'] ?? 'Recommended Products on Page' ) ),
+            'disclosure'                => wp_kses_post( wp_unslash( $_POST['disclosure'] ?? '' ) ),
+            'credit_location'           => ( isset( $_POST['credit_location'] ) && in_array( sanitize_text_field( wp_unslash( $_POST['credit_location'] ) ), array( 'none', 'sidebar', 'shortcode', 'both' ), true ) ) ? sanitize_text_field( wp_unslash( $_POST['credit_location'] ) ) : 'none',
+            'hide_shortcode_on_desktop' => isset( $_POST['hide_shortcode_on_desktop'] ) ? 1 : 0,
+            'link_new_tab'              => isset( $_POST['link_new_tab'] ) ? 1 : 0,
+            'link_rel_sponsored'        => isset( $_POST['link_rel_sponsored'] ) ? 1 : 0,
+            'link_rel_nofollow'         => isset( $_POST['link_rel_nofollow'] ) ? 1 : 0,
+            'link_rel_noopener'         => isset( $_POST['link_rel_noopener'] ) ? 1 : 0,
+            'max_links_display'         => max( 1, min( 5, absint( $_POST['max_links_display'] ?? 5 ) ) ),
         );
         update_option( 'wbuild_als_settings', $settings );
         echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Settings saved.', 'wbuild-affiliate-links-sidebar' ) . '</p></div>';
@@ -239,7 +238,7 @@ function wbuild_als_settings_page() {
                             printf(
                                 /* translators: %s: shortcode tag */
                                 esc_html__( 'Title shown above the list when using the shortcode %s in any post or page.', 'wbuild-affiliate-links-sidebar' ),
-                                '<code>[affiliate-links]</code>'
+                                '<code>[wbuild-affiliate-links]</code>'
                             );
                             ?>
                         </p>
@@ -396,7 +395,6 @@ class WBuild_Affiliate_Links_Widget extends WP_Widget {
         if ( ! empty( $settings['link_rel_noopener'] ) && ! empty( $settings['link_new_tab'] ) ) {
             $rel_parts[] = 'noopener';
         }
-        $rel_attr = $rel_parts ? ' rel="' . esc_attr( implode( ' ', $rel_parts ) ) . '"' : '';
 
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
         echo $args['before_widget'];
@@ -507,7 +505,6 @@ function wbuild_als_shortcode() {
 
     $title = $settings['shortcode_title'] ?? 'Recommended Products on Page';
 
-    $target = ! empty( $settings['link_new_tab'] ) ? ' target="_blank"' : '';
     $rel_parts = array();
     if ( ! empty( $settings['link_rel_sponsored'] ) ) {
         $rel_parts[] = 'sponsored';
@@ -518,7 +515,6 @@ function wbuild_als_shortcode() {
     if ( ! empty( $settings['link_rel_noopener'] ) && ! empty( $settings['link_new_tab'] ) ) {
         $rel_parts[] = 'noopener';
     }
-    $rel_attr = $rel_parts ? ' rel="' . esc_attr( implode( ' ', $rel_parts ) ) . '"' : '';
 
     ob_start();
     ?>
@@ -555,7 +551,7 @@ function wbuild_als_shortcode() {
     $in_progress = false;
     return ob_get_clean();
 }
-add_shortcode( 'affiliate-links', 'wbuild_als_shortcode' );
+add_shortcode( 'wbuild-affiliate-links', 'wbuild_als_shortcode' );
 
 // ============================================================
 // REGISTER WIDGET

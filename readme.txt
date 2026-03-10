@@ -4,7 +4,7 @@ Tags: affiliate, amazon, links, shortcode, sidebar
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.7.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,7 +19,7 @@ Unlike other affiliate plugins that require manual imports or API keys, this plu
 The plugin scans the current post/page content for affiliate links (starting with your chosen prefix, e.g. `https://amzn.to/`) and automatically displays them in:
 
 – A beautiful sidebar widget (Appearance → Widgets)
-– Or an inline shortcode block `[affiliate-links]`
+– Or an inline shortcode block `[wbuild-affiliate-links]`
 
 Perfect for Amazon Associates, bloggers, reviewers, and content creators who want to highlight recommended products without extra work.
 
@@ -46,7 +46,7 @@ Great for product roundups, reviews, buying guides, comparison posts — anywher
 2. Activate the plugin through the 'Plugins' screen in WordPress
 3. Go to **Settings → wBuild Affiliate Sidebar** to set your affiliate prefix (default: https://amzn.to/) and customize titles/disclosure
 4. Add the widget to any sidebar via **Appearance → Widgets**
-5. Or place the shortcode `[affiliate-links]` anywhere in your post/page content
+5. Or place the shortcode `[wbuild-affiliate-links]` anywhere in your post/page content
 
 == Frequently Asked Questions ==
 
@@ -57,7 +57,7 @@ Any program that uses a consistent URL prefix (e.g. `https://amzn.to/`, `https:/
 It scans the current post/page content for any hyperlinks that begin with your prefix. It then shows the link text (or URL fallback) in a clean list.
 
 = Can I use it without a sidebar? =
-Yes — use the shortcode `[affiliate-links]` anywhere: in the content, in a block, in a footer, etc.
+Yes — use the shortcode `[wbuild-affiliate-links]` anywhere: in the content, in a block, in a footer, etc.
 
 = Is there a limit on links? =
 Free version: maximum 5 links per page/post (configurable 1–5).
@@ -71,12 +71,21 @@ Yes — use the Custom CSS fields in settings, or override the classes `.affilia
 
 == Screenshots ==
 
-1. Example sidebar widget output showing recommended products
-2. Shortcode block displayed inline in post content (mobile view)
-3. Settings page – prefix, behavior, and display limits
-4. Settings page – titles, disclosure, and credit options
+1. Sidebar widget displaying affiliate links on a live page
+2. Settings page – prefix, titles, disclosure, and link behavior
+3. Settings page – custom CSS and shortcode visibility options
+4. Shortcode output displayed inline within post content
+5. Mobile responsive view of the affiliate links widget
+6. Widget configuration in WordPress admin
 
 == Changelog ==
+
+= 1.7.1 =
+* Security: CSS fields (sidebar_css, shortcode_css) now sanitized with wp_strip_all_tags() on save
+* Security: Individual $_POST keys accessed directly instead of processing entire $_POST array
+* Security: Added validation for credit_location against allowed values
+* Prefixed shortcode name from `affiliate-links` to `wbuild-affiliate-links` for uniqueness
+* Used absint() for max_links_display input
 
 = 1.7.0 =
 * Rebranded to wBuild Affiliate Links Sidebar under wBuild.dev
@@ -127,6 +136,9 @@ Yes — use the Custom CSS fields in settings, or override the classes `.affilia
 * Single prefix support, basic styling, disclosure field
 
 == Upgrade Notice ==
+
+= 1.7.1 =
+Security and standards fixes: proper input sanitization, individual $_POST access, validated options, and prefixed shortcode name. **Breaking change:** shortcode is now `[wbuild-affiliate-links]` — update any existing shortcode blocks.
 
 = 1.7.0 =
 Rebranded to wBuild Affiliate Links Sidebar. All CSS properly enqueued per WordPress standards. Credit links to wBuild.dev (opt-in). Updated text domain.
