@@ -1,8 +1,9 @@
 <?php
+
 /**
  * Plugin Name: wBuild Affiliate Links Sidebar
  * Description: Auto-detects affiliate links in your content and displays them in a sidebar widget or shortcode.
- * Version: 1.7.1
+ * Version: 1.8.0
  * Author: wBuild.dev
  * Author URI: https://wbuild.dev
  * License: GPL-2.0+
@@ -11,34 +12,92 @@
  * Tested up to: 6.9
  * Requires PHP: 7.4
  */
-
-if ( ! defined( 'ABSPATH' ) ) {
+if ( !defined( 'ABSPATH' ) ) {
     exit;
 }
+// ============================================================
+// FREEMIUS AUTO-DEACTIVATION WRAPPER
+// ============================================================
+// If wals_fs already exists (premium version is active), register
+// this file's basename so the SDK can auto-deactivate the free version.
+if ( function_exists( 'wals_fs' ) ) {
+    wals_fs()->set_basename( false, __FILE__ );
+} else {
+    /**
+     * DO NOT REMOVE THIS IF, IT IS ESSENTIAL FOR THE
+     * `function_exists` CALL ABOVE TO PROPERLY WORK.
+     */
+    if ( !function_exists( 'wals_fs' ) ) {
+        // Create a helper function for easy SDK access.
+        function wals_fs() {
+            global $wals_fs;
+            if ( !isset( $wals_fs ) ) {
+                // Include Freemius SDK.
+                require_once dirname( __FILE__ ) . '/vendor/freemius/start.php';
+                $wals_fs = fs_dynamic_init( array(
+                    'id'               => '26026',
+                    'slug'             => 'wbuild-affiliate-links-sidebar',
+                    'premium_slug'     => 'wbuild-affiliate-links-sidebar-pro',
+                    'type'             => 'plugin',
+                    'public_key'       => 'pk_872f14577999125d631e5caeb614f',
+                    'is_premium'       => false,
+                    'premium_suffix'   => 'Pro',
+                    'has_addons'       => false,
+                    'has_paid_plans'   => true,
+                    'is_org_compliant' => true,
+                    'trial'            => array(
+                        'days'               => 3,
+                        'is_require_payment' => false,
+                    ),
+                    'menu'             => array(
+                        'slug'   => 'wbuild-affiliate-links-sidebar',
+                        'parent' => array(
+                            'slug' => 'options-general.php',
+                        ),
+                    ),
+                    'is_live'          => true,
+                ) );
+            }
+            return $wals_fs;
+        }
 
-define( 'WBUILD_ALS_VERSION', '1.7.1' );
-
-// ============================================================
-// SETTINGS LINK ON PLUGINS PAGE
-// ============================================================
-add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'wbuild_als_action_links' );
-function wbuild_als_action_links( $links ) {
-    $settings_link = '<a href="' . esc_url( admin_url( 'options-general.php?page=wbuild-affiliate-links-sidebar' ) ) . '">' . esc_html__( 'Settings', 'wbuild-affiliate-links-sidebar' ) . '</a>';
-    array_unshift( $links, $settings_link );
-    return $links;
-}
-
-// ============================================================
-// FRONTEND STYLES — properly enqueued (Review Fix #3)
-// ============================================================
-add_action( 'wp_enqueue_scripts', 'wbuild_als_enqueue_frontend_styles' );
-function wbuild_als_enqueue_frontend_styles() {
-    if ( ! is_singular() ) {
-        return;
+        // Init Freemius.
+        wals_fs();
+        // Signal that SDK was initiated.
+        do_action( 'wals_fs_loaded' );
+    }
+    define( 'WBUILD_ALS_VERSION', '1.8.0' );
+    /**
+     * Helper: is the current user on a paid/trial plan?
+     *
+     * Wrapped in is__premium_only() so the Freemius preprocessor strips the
+     * inner return from the free version, making it always return false on wp.org.
+     *
+     * @return bool
+     */
+    function wbuild_als_is_pro() {
+        return false;
     }
 
-    // Default styles
-    $default_css = '
+    // ============================================================
+    // SETTINGS LINK ON PLUGINS PAGE
+    // ============================================================
+    add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'wbuild_als_action_links' );
+    function wbuild_als_action_links(  $links  ) {
+        $settings_link = '<a href="' . esc_url( admin_url( 'options-general.php?page=wbuild-affiliate-links-sidebar' ) ) . '">' . esc_html__( 'Settings', 'wbuild-affiliate-links-sidebar' ) . '</a>';
+        array_unshift( $links, $settings_link );
+        return $links;
+    }
+
+    // ============================================================
+    // FRONTEND STYLES - properly enqueued (Review Fix #3)
+    // ============================================================
+    add_action( 'wp_enqueue_scripts', 'wbuild_als_enqueue_frontend_styles' );
+    function wbuild_als_enqueue_frontend_styles() {
+        if ( !is_singular() ) {
+            return;
+        }
+        $default_css = '
         .affiliate-links-widget, .affiliate-links-shortcode {
             margin: 2em 0;
             padding: 1.5em;
@@ -93,30 +152,31 @@ function wbuild_als_enqueue_frontend_styles() {
         }
         @media (max-width: 768px) { .desktop-only { display: none !important; } }
     ';
-
-    wp_register_style( 'wbuild-als-default', false, array(), WBUILD_ALS_VERSION );
-    wp_enqueue_style( 'wbuild-als-default' );
-    wp_add_inline_style( 'wbuild-als-default', $default_css );
-
-    // Custom user CSS (from settings)
-    $settings = get_option( 'wbuild_als_settings', array() );
-    $custom_css = trim( ( $settings['sidebar_css'] ?? '' ) . "\n" . ( $settings['shortcode_css'] ?? '' ) );
-
-    if ( $custom_css !== '' ) {
-        wp_add_inline_style( 'wbuild-als-default', wp_strip_all_tags( $custom_css ) );
-    }
-}
-
-// ============================================================
-// ADMIN STYLES — properly enqueued (Review Fix #3)
-// ============================================================
-add_action( 'admin_enqueue_scripts', 'wbuild_als_enqueue_admin_styles' );
-function wbuild_als_enqueue_admin_styles( $hook ) {
-    if ( 'settings_page_wbuild-affiliate-links-sidebar' !== $hook ) {
-        return;
+        wp_register_style(
+            'wbuild-als-default',
+            false,
+            array(),
+            WBUILD_ALS_VERSION
+        );
+        wp_enqueue_style( 'wbuild-als-default' );
+        wp_add_inline_style( 'wbuild-als-default', $default_css );
+        // Custom user CSS (from settings)
+        $settings = get_option( 'wbuild_als_settings', array() );
+        $custom_css = trim( ($settings['sidebar_css'] ?? '') . "\n" . ($settings['shortcode_css'] ?? '') );
+        if ( $custom_css !== '' ) {
+            wp_add_inline_style( 'wbuild-als-default', wp_strip_all_tags( $custom_css ) );
+        }
     }
 
-    $admin_css = '
+    // ============================================================
+    // ADMIN STYLES - properly enqueued (Review Fix #3)
+    // ============================================================
+    add_action( 'admin_enqueue_scripts', 'wbuild_als_enqueue_admin_styles' );
+    function wbuild_als_enqueue_admin_styles(  $hook  ) {
+        if ( 'settings_page_wbuild-affiliate-links-sidebar' !== $hook ) {
+            return;
+        }
+        $admin_css = '
         .dashicons.dashicons-info {
             text-decoration: none;
             color: #666;
@@ -131,431 +191,764 @@ function wbuild_als_enqueue_admin_styles( $hook ) {
         .info-tooltip {
             cursor: help;
         }
+        .wbuild-als-pro-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ff9900, #ff6600);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 3px;
+            margin-left: 6px;
+            vertical-align: middle;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .wbuild-als-pro-upsell {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin: 10px 0;
+        }
+        .wbuild-als-pro-upsell a {
+            color: #ff6600;
+            font-weight: 600;
+        }
     ';
-
-    wp_register_style( 'wbuild-als-admin', false, array(), WBUILD_ALS_VERSION );
-    wp_enqueue_style( 'wbuild-als-admin' );
-    wp_add_inline_style( 'wbuild-als-admin', $admin_css );
-}
-
-// ============================================================
-// SETTINGS PAGE
-// ============================================================
-add_action( 'admin_menu', 'wbuild_als_add_settings_page' );
-function wbuild_als_add_settings_page() {
-    add_options_page(
-        'wBuild Affiliate Links Sidebar Settings',
-        'wBuild Affiliate Sidebar',
-        'manage_options',
-        'wbuild-affiliate-links-sidebar',
-        'wbuild_als_settings_page'
-    );
-}
-
-function wbuild_als_settings_page() {
-    if ( isset( $_POST['wbuild_als_submit'] ) && check_admin_referer( 'wbuild_als_settings_nonce' ) ) {
-
-        $settings = array(
-            'prefix'                    => esc_url_raw( trim( sanitize_url( wp_unslash( $_POST['prefix'] ?? 'https://amzn.to/' ) ) ) ),
-            'sidebar_css'               => wp_strip_all_tags( wp_unslash( $_POST['sidebar_css'] ?? '' ) ),
-            'shortcode_css'             => wp_strip_all_tags( wp_unslash( $_POST['shortcode_css'] ?? '' ) ),
-            'widget_title'              => sanitize_text_field( wp_unslash( $_POST['widget_title'] ?? 'Recommended Products on Page' ) ),
-            'shortcode_title'           => sanitize_text_field( wp_unslash( $_POST['shortcode_title'] ?? 'Recommended Products on Page' ) ),
-            'disclosure'                => wp_kses_post( wp_unslash( $_POST['disclosure'] ?? '' ) ),
-            'credit_location'           => ( isset( $_POST['credit_location'] ) && in_array( sanitize_text_field( wp_unslash( $_POST['credit_location'] ) ), array( 'none', 'sidebar', 'shortcode', 'both' ), true ) ) ? sanitize_text_field( wp_unslash( $_POST['credit_location'] ) ) : 'none',
-            'hide_shortcode_on_desktop' => isset( $_POST['hide_shortcode_on_desktop'] ) ? 1 : 0,
-            'link_new_tab'              => isset( $_POST['link_new_tab'] ) ? 1 : 0,
-            'link_rel_sponsored'        => isset( $_POST['link_rel_sponsored'] ) ? 1 : 0,
-            'link_rel_nofollow'         => isset( $_POST['link_rel_nofollow'] ) ? 1 : 0,
-            'link_rel_noopener'         => isset( $_POST['link_rel_noopener'] ) ? 1 : 0,
-            'max_links_display'         => max( 1, min( 5, absint( $_POST['max_links_display'] ?? 5 ) ) ),
+        wp_register_style(
+            'wbuild-als-admin',
+            false,
+            array(),
+            WBUILD_ALS_VERSION
         );
-        update_option( 'wbuild_als_settings', $settings );
-        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Settings saved.', 'wbuild-affiliate-links-sidebar' ) . '</p></div>';
+        wp_enqueue_style( 'wbuild-als-admin' );
+        wp_add_inline_style( 'wbuild-als-admin', $admin_css );
     }
 
-    $defaults = array(
-        'prefix'                    => 'https://amzn.to/',
-        'sidebar_css'               => ".affiliate-links-widget { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; }\n.affiliate-links-widget li { border-left-color: #ff9900; background: white; }\n.affiliate-links-widget a:hover { color: #ff9900; }",
-        'shortcode_css'             => ".affiliate-links-shortcode { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; margin: 2em 0; }\n.affiliate-links-shortcode h4 { color: #232f3e; }\n.affiliate-links-shortcode li { border-left-color: #ff9900; background: white; }\n.affiliate-links-shortcode a:hover { color: #ff9900; }",
-        'widget_title'              => 'Recommended Products on Page',
-        'shortcode_title'           => 'Recommended Products on Page',
-        'disclosure'                => 'As an Amazon Associate I earn from qualifying purchases. This site contains affiliate links, commissions may be earned at no extra cost to you.',
-        'credit_location'           => 'none',
-        'hide_shortcode_on_desktop' => 0,
-        'link_new_tab'              => 1,
-        'link_rel_sponsored'        => 1,
-        'link_rel_nofollow'         => 0,
-        'link_rel_noopener'         => 1,
-        'max_links_display'         => 5,
-    );
-    $settings = wp_parse_args( get_option( 'wbuild_als_settings', $defaults ), $defaults );
+    // ============================================================
+    // SETTINGS PAGE
+    // ============================================================
+    add_action( 'admin_menu', 'wbuild_als_add_settings_page' );
+    function wbuild_als_add_settings_page() {
+        add_options_page(
+            'wBuild Affiliate Links Sidebar Settings',
+            'wBuild Affiliate Sidebar',
+            'manage_options',
+            'wbuild-affiliate-links-sidebar',
+            'wbuild_als_settings_page'
+        );
+    }
 
-    $default_widget_css = ".affiliate-links-widget { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; }\n.affiliate-links-widget li { border-left-color: #ff9900; background: white; }\n.affiliate-links-widget a:hover { color: #ff9900; }";
-    $default_shortcode_css = ".affiliate-links-shortcode { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; margin: 2em 0; }\n.affiliate-links-shortcode h4 { color: #232f3e; }\n.affiliate-links-shortcode li { border-left-color: #ff9900; background: white; }\n.affiliate-links-shortcode a:hover { color: #ff9900; }";
-    ?>
+    function wbuild_als_settings_page() {
+        $is_pro = wbuild_als_is_pro();
+        if ( isset( $_POST['wbuild_als_submit'] ) && check_admin_referer( 'wbuild_als_settings_nonce' ) ) {
+            $settings = array(
+                'sidebar_css'               => wp_strip_all_tags( wp_unslash( $_POST['sidebar_css'] ?? '' ) ),
+                'shortcode_css'             => wp_strip_all_tags( wp_unslash( $_POST['shortcode_css'] ?? '' ) ),
+                'widget_title'              => sanitize_text_field( wp_unslash( $_POST['widget_title'] ?? 'Recommended Products on Page' ) ),
+                'shortcode_title'           => sanitize_text_field( wp_unslash( $_POST['shortcode_title'] ?? 'Recommended Products on Page' ) ),
+                'disclosure'                => wp_kses_post( wp_unslash( $_POST['disclosure'] ?? '' ) ),
+                'credit_location'           => ( isset( $_POST['credit_location'] ) && in_array( sanitize_text_field( wp_unslash( $_POST['credit_location'] ) ), array(
+                    'none',
+                    'sidebar',
+                    'shortcode',
+                    'both'
+                ), true ) ? sanitize_text_field( wp_unslash( $_POST['credit_location'] ) ) : 'none' ),
+                'hide_shortcode_on_desktop' => ( isset( $_POST['hide_shortcode_on_desktop'] ) ? 1 : 0 ),
+                'link_new_tab'              => ( isset( $_POST['link_new_tab'] ) ? 1 : 0 ),
+                'link_rel_sponsored'        => ( isset( $_POST['link_rel_sponsored'] ) ? 1 : 0 ),
+                'link_rel_nofollow'         => ( isset( $_POST['link_rel_nofollow'] ) ? 1 : 0 ),
+                'link_rel_noopener'         => ( isset( $_POST['link_rel_noopener'] ) ? 1 : 0 ),
+            );
+            // Free: single prefix, max 1-5.
+            if ( !$is_pro ) {
+                $settings['prefix'] = esc_url_raw( trim( sanitize_url( wp_unslash( $_POST['prefix'] ?? 'https://amzn.to/' ) ) ) );
+                $settings['max_links_display'] = max( 1, min( 5, absint( $_POST['max_links_display'] ?? 5 ) ) );
+            }
+            update_option( 'wbuild_als_settings', $settings );
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Settings saved.', 'wbuild-affiliate-links-sidebar' ) . '</p></div>';
+        }
+        $defaults = array(
+            'prefix'                    => 'https://amzn.to/',
+            'prefixes'                  => "https://amzn.to/\nhttps://shareasale.com/",
+            'sidebar_css'               => ".affiliate-links-widget { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; }\n.affiliate-links-widget li { border-left-color: #ff9900; background: white; }\n.affiliate-links-widget a:hover { color: #ff9900; }",
+            'shortcode_css'             => ".affiliate-links-shortcode { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; margin: 2em 0; }\n.affiliate-links-shortcode h4 { color: #232f3e; }\n.affiliate-links-shortcode li { border-left-color: #ff9900; background: white; }\n.affiliate-links-shortcode a:hover { color: #ff9900; }",
+            'widget_title'              => 'Recommended Products on Page',
+            'shortcode_title'           => 'Recommended Products on Page',
+            'disclosure'                => 'As an Amazon Associate I earn from qualifying purchases. This site contains affiliate links, commissions may be earned at no extra cost to you.',
+            'credit_location'           => 'none',
+            'hide_shortcode_on_desktop' => 0,
+            'link_new_tab'              => 1,
+            'link_rel_sponsored'        => 1,
+            'link_rel_nofollow'         => 0,
+            'link_rel_noopener'         => 1,
+            'max_links_display'         => 5,
+        );
+        $settings = wp_parse_args( get_option( 'wbuild_als_settings', $defaults ), $defaults );
+        $default_widget_css = ".affiliate-links-widget { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; }\n.affiliate-links-widget li { border-left-color: #ff9900; background: white; }\n.affiliate-links-widget a:hover { color: #ff9900; }";
+        $default_shortcode_css = ".affiliate-links-shortcode { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5em; margin: 2em 0; }\n.affiliate-links-shortcode h4 { color: #232f3e; }\n.affiliate-links-shortcode li { border-left-color: #ff9900; background: white; }\n.affiliate-links-shortcode a:hover { color: #ff9900; }";
+        ?>
     <div class="wrap">
-        <h1><?php esc_html_e( 'wBuild Affiliate Links Sidebar Settings', 'wbuild-affiliate-links-sidebar' ); ?></h1>
+        <h1>
+            <?php 
+        esc_html_e( 'wBuild Affiliate Links Sidebar Settings', 'wbuild-affiliate-links-sidebar' );
+        ?>
+            <?php 
+        if ( $is_pro ) {
+            ?>
+                <span class="wbuild-als-pro-badge"><?php 
+            esc_html_e( 'Pro', 'wbuild-affiliate-links-sidebar' );
+            ?></span>
+            <?php 
+        }
+        ?>
+        </h1>
         <form method="post" action="">
-            <?php wp_nonce_field( 'wbuild_als_settings_nonce' ); ?>
+            <?php 
+        wp_nonce_field( 'wbuild_als_settings_nonce' );
+        ?>
 
-            <h2><?php esc_html_e( 'Affiliate Prefix', 'wbuild-affiliate-links-sidebar' ); ?></h2>
+            <!-- ========== AFFILIATE PREFIX(ES) ========== -->
+            <?php 
+        if ( $is_pro ) {
+            ?>
+                <h2><?php 
+            esc_html_e( 'Affiliate Prefixes', 'wbuild-affiliate-links-sidebar' );
+            ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php 
+            esc_html_e( 'Prefixes (one per line)', 'wbuild-affiliate-links-sidebar' );
+            ?></th>
+                        <td>
+                            <textarea name="prefixes" rows="5" class="widefat"><?php 
+            echo esc_textarea( $settings['prefixes'] );
+            ?></textarea>
+                            <p class="description">
+                                <?php 
+            esc_html_e( 'Used by both widget and shortcode.', 'wbuild-affiliate-links-sidebar' );
+            ?><br>
+                                <?php 
+            esc_html_e( 'Add one prefix per line (e.g. https://amzn.to/, https://shareasale.com/r.cfm?b=...).', 'wbuild-affiliate-links-sidebar' );
+            ?><br>
+                                <?php 
+            esc_html_e( 'The plugin scans content for links starting with any of these.', 'wbuild-affiliate-links-sidebar' );
+            ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            <?php 
+        } else {
+            ?>
+                <h2><?php 
+            esc_html_e( 'Affiliate Prefix', 'wbuild-affiliate-links-sidebar' );
+            ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <?php 
+            esc_html_e( 'Link Prefix', 'wbuild-affiliate-links-sidebar' );
+            ?>
+                            <a href="<?php 
+            echo esc_url( wals_fs()->get_upgrade_url() );
+            ?>" class="dashicons dashicons-info" title="<?php 
+            esc_attr_e( 'Want to support multiple affiliate programs? Upgrade to Pro for multiple prefixes.', 'wbuild-affiliate-links-sidebar' );
+            ?>"></a>
+                        </th>
+                        <td>
+                            <input type="text" name="prefix" value="<?php 
+            echo esc_attr( $settings['prefix'] );
+            ?>" class="regular-text">
+                            <p class="description">
+                                <?php 
+            esc_html_e( 'Used by both widget and shortcode.', 'wbuild-affiliate-links-sidebar' );
+            ?><br>
+                                <?php 
+            esc_html_e( 'A prefix is the beginning part of your affiliate links (the domain/shortener before the unique code).', 'wbuild-affiliate-links-sidebar' );
+            ?><br>
+                                <?php 
+            esc_html_e( 'The plugin scans your page content for any links that start with this prefix and displays them.', 'wbuild-affiliate-links-sidebar' );
+            ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            <?php 
+        }
+        ?>
+
+            <!-- ========== TITLES ========== -->
+            <h2><?php 
+        esc_html_e( 'Titles', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php 
+        esc_html_e( 'Widget Title', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
+                    <td>
+                        <input type="text" name="widget_title" value="<?php 
+        echo esc_attr( $settings['widget_title'] );
+        ?>" class="regular-text">
+                        <p class="description">
+                            <?php 
+        esc_html_e( 'Title shown above the list in the sidebar widget.', 'wbuild-affiliate-links-sidebar' );
+        ?><br>
+                            <a href="<?php 
+        echo esc_url( admin_url( 'widgets.php' ) );
+        ?>" target="_blank" rel="noopener"><?php 
+        esc_html_e( 'Add the widget here > Appearance > Widgets', 'wbuild-affiliate-links-sidebar' );
+        ?></a>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php 
+        esc_html_e( 'Shortcode Title', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
+                    <td>
+                        <input type="text" name="shortcode_title" value="<?php 
+        echo esc_attr( $settings['shortcode_title'] );
+        ?>" class="regular-text">
+                        <p class="description">
+                            <?php 
+        printf( 
+            /* translators: %s: shortcode tag */
+            esc_html__( 'Title shown above the list when using the shortcode %s in any post or page.', 'wbuild-affiliate-links-sidebar' ),
+            '<code>[wbuild-affiliate-links]</code>'
+         );
+        ?>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- ========== DISCLOSURE ========== -->
+            <h2><?php 
+        esc_html_e( 'Disclosure', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
+            <table class="form-table">
+                <tr><th scope="row"><?php 
+        esc_html_e( 'Disclosure Text', 'wbuild-affiliate-links-sidebar' );
+        ?></th><td><textarea name="disclosure" rows="3" class="widefat"><?php 
+        echo esc_textarea( $settings['disclosure'] );
+        ?></textarea></td></tr>
+            </table>
+
+            <!-- ========== LINK BEHAVIOR ========== -->
+            <h2><?php 
+        esc_html_e( 'Link Behavior', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php 
+        esc_html_e( 'Behavior', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
+                    <td>
+                        <label><input type="checkbox" name="link_new_tab" value="1" <?php 
+        checked( $settings['link_new_tab'], 1 );
+        ?>> <?php 
+        esc_html_e( 'Open links in new tab', 'wbuild-affiliate-links-sidebar' );
+        ?></label><br>
+                        <label><input type="checkbox" name="link_rel_sponsored" value="1" <?php 
+        checked( $settings['link_rel_sponsored'], 1 );
+        ?>> <?php 
+        esc_html_e( 'Add rel="sponsored"', 'wbuild-affiliate-links-sidebar' );
+        ?></label><br>
+                        <label><input type="checkbox" name="link_rel_nofollow" value="1" <?php 
+        checked( $settings['link_rel_nofollow'], 1 );
+        ?>> <?php 
+        esc_html_e( 'Add rel="nofollow"', 'wbuild-affiliate-links-sidebar' );
+        ?></label><br>
+                        <label><input type="checkbox" name="link_rel_noopener" value="1" <?php 
+        checked( $settings['link_rel_noopener'], 1 );
+        ?>> <?php 
+        esc_html_e( 'Add rel="noopener" (when new tab)', 'wbuild-affiliate-links-sidebar' );
+        ?></label>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- ========== DISPLAY LIMITS ========== -->
+            <h2><?php 
+        esc_html_e( 'Display Limits', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
             <table class="form-table">
                 <tr>
                     <th scope="row">
-                        <?php esc_html_e( 'Link Prefix', 'wbuild-affiliate-links-sidebar' ); ?>
-                        <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener" class="dashicons dashicons-info" title="<?php esc_attr_e( 'Want to support multiple affiliate programs (e.g., Amazon + ShareASale)? Check out Pro for multiple prefixes.', 'wbuild-affiliate-links-sidebar' ); ?>"></a>
+                        <?php 
+        esc_html_e( 'Max Links to Display', 'wbuild-affiliate-links-sidebar' );
+        ?>
+                        <?php 
+        if ( !$is_pro ) {
+            ?>
+                            <span class="dashicons dashicons-info info-tooltip" title="<?php 
+            esc_attr_e( 'The free version is limited to a maximum of 5 links per page. Upgrade to Pro for unlimited links.', 'wbuild-affiliate-links-sidebar' );
+            ?>"></span>
+                        <?php 
+        }
+        ?>
                     </th>
                     <td>
-                        <input type="text" name="prefix" value="<?php echo esc_attr( $settings['prefix'] ); ?>" class="regular-text">
-                        <p class="description">
-                            <?php esc_html_e( 'Used by both widget and shortcode.', 'wbuild-affiliate-links-sidebar' ); ?><br>
-                            <?php esc_html_e( 'A prefix is the beginning part of your affiliate links (the domain/shortener before the unique code).', 'wbuild-affiliate-links-sidebar' ); ?><br>
-                            <?php esc_html_e( 'The plugin scans your page content for any links that start with this prefix and displays them.', 'wbuild-affiliate-links-sidebar' ); ?>
-                        </p>
+                        <?php 
+        if ( $is_pro ) {
+            ?>
+                            <input type="number" name="max_links_display" min="0" value="<?php 
+            echo esc_attr( $settings['max_links_display'] );
+            ?>" class="small-text">
+                            <p class="description"><?php 
+            esc_html_e( 'Set to 0 for unlimited links.', 'wbuild-affiliate-links-sidebar' );
+            ?></p>
+                        <?php 
+        } else {
+            ?>
+                            <select name="max_links_display">
+                                <?php 
+            for ($i = 1; $i <= 5; $i++) {
+                ?>
+                                    <option value="<?php 
+                echo esc_attr( $i );
+                ?>"<?php 
+                selected( $settings['max_links_display'], $i );
+                ?>><?php 
+                echo esc_html( $i );
+                ?></option>
+                                <?php 
+            }
+            ?>
+                            </select>
+                            <p class="description"><?php 
+            esc_html_e( 'Choose how many affiliate links to show per page (limited to 5 in free version).', 'wbuild-affiliate-links-sidebar' );
+            ?></p>
+                        <?php 
+        }
+        ?>
                     </td>
                 </tr>
             </table>
 
-            <h2><?php esc_html_e( 'Titles', 'wbuild-affiliate-links-sidebar' ); ?></h2>
+            <!-- ========== CREDIT ========== -->
+            <h2><?php 
+        esc_html_e( 'Credit', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
             <table class="form-table">
                 <tr>
-                    <th scope="row"><?php esc_html_e( 'Widget Title', 'wbuild-affiliate-links-sidebar' ); ?></th>
+                    <th scope="row"><?php 
+        esc_html_e( 'Credit Location', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
                     <td>
-                        <input type="text" name="widget_title" value="<?php echo esc_attr( $settings['widget_title'] ); ?>" class="regular-text">
-                        <p class="description">
-                            <?php esc_html_e( 'Title shown above the list in the sidebar widget.', 'wbuild-affiliate-links-sidebar' ); ?><br>
-                            <a href="<?php echo esc_url( admin_url( 'widgets.php' ) ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Add the widget here → Appearance → Widgets', 'wbuild-affiliate-links-sidebar' ); ?></a>
-                        </p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><?php esc_html_e( 'Shortcode Title', 'wbuild-affiliate-links-sidebar' ); ?></th>
-                    <td>
-                        <input type="text" name="shortcode_title" value="<?php echo esc_attr( $settings['shortcode_title'] ); ?>" class="regular-text">
-                        <p class="description">
-                            <?php
-                            printf(
-                                /* translators: %s: shortcode tag */
-                                esc_html__( 'Title shown above the list when using the shortcode %s in any post or page.', 'wbuild-affiliate-links-sidebar' ),
-                                '<code>[wbuild-affiliate-links]</code>'
-                            );
-                            ?>
-                        </p>
-                    </td>
-                </tr>
-            </table>
-
-            <h2><?php esc_html_e( 'Disclosure', 'wbuild-affiliate-links-sidebar' ); ?></h2>
-            <table class="form-table">
-                <tr><th scope="row"><?php esc_html_e( 'Disclosure Text', 'wbuild-affiliate-links-sidebar' ); ?></th><td><textarea name="disclosure" rows="3" class="widefat"><?php echo esc_textarea( $settings['disclosure'] ); ?></textarea></td></tr>
-            </table>
-
-            <h2><?php esc_html_e( 'Link Behavior', 'wbuild-affiliate-links-sidebar' ); ?></h2>
-            <table class="form-table">
-                <tr>
-                    <th scope="row"><?php esc_html_e( 'Behavior', 'wbuild-affiliate-links-sidebar' ); ?></th>
-                    <td>
-                        <label><input type="checkbox" name="link_new_tab" value="1" <?php checked( $settings['link_new_tab'], 1 ); ?>> <?php esc_html_e( 'Open links in new tab', 'wbuild-affiliate-links-sidebar' ); ?></label><br>
-                        <label><input type="checkbox" name="link_rel_sponsored" value="1" <?php checked( $settings['link_rel_sponsored'], 1 ); ?>> <?php esc_html_e( 'Add rel="sponsored"', 'wbuild-affiliate-links-sidebar' ); ?></label><br>
-                        <label><input type="checkbox" name="link_rel_nofollow" value="1" <?php checked( $settings['link_rel_nofollow'], 1 ); ?>> <?php esc_html_e( 'Add rel="nofollow"', 'wbuild-affiliate-links-sidebar' ); ?></label><br>
-                        <label><input type="checkbox" name="link_rel_noopener" value="1" <?php checked( $settings['link_rel_noopener'], 1 ); ?>> <?php esc_html_e( 'Add rel="noopener" (when new tab)', 'wbuild-affiliate-links-sidebar' ); ?></label>
+                        <label><input type="radio" name="credit_location" value="none" <?php 
+        checked( $settings['credit_location'], 'none' );
+        ?>> <?php 
+        esc_html_e( 'Never', 'wbuild-affiliate-links-sidebar' );
+        ?></label><br>
+                        <label><input type="radio" name="credit_location" value="sidebar" <?php 
+        checked( $settings['credit_location'], 'sidebar' );
+        ?>> <?php 
+        esc_html_e( 'Sidebar widget only', 'wbuild-affiliate-links-sidebar' );
+        ?></label><br>
+                        <label><input type="radio" name="credit_location" value="shortcode" <?php 
+        checked( $settings['credit_location'], 'shortcode' );
+        ?>> <?php 
+        esc_html_e( 'Shortcode block only', 'wbuild-affiliate-links-sidebar' );
+        ?></label><br>
+                        <label><input type="radio" name="credit_location" value="both" <?php 
+        checked( $settings['credit_location'], 'both' );
+        ?>> <?php 
+        esc_html_e( 'Both', 'wbuild-affiliate-links-sidebar' );
+        ?></label>
+                        <p class="description"><?php 
+        esc_html_e( 'Shows a small "Powered by wBuild.dev" credit linking to the plugin page. Opt-in only. Defaults to never.', 'wbuild-affiliate-links-sidebar' );
+        ?></p>
                     </td>
                 </tr>
             </table>
 
-            <h2><?php esc_html_e( 'Display Limits', 'wbuild-affiliate-links-sidebar' ); ?></h2>
+            <!-- ========== SHORTCODE VISIBILITY ========== -->
+            <h2><?php 
+        esc_html_e( 'Shortcode Visibility', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
             <table class="form-table">
                 <tr>
-                    <th scope="row">
-                        <?php esc_html_e( 'Max Links to Display', 'wbuild-affiliate-links-sidebar' ); ?>
-                        <span class="dashicons dashicons-info info-tooltip" title="<?php esc_attr_e( 'The free version is limited to a maximum of 5 links per page. The Pro version removes this limit and allows unlimited links.', 'wbuild-affiliate-links-sidebar' ); ?>"></span>
-                    </th>
-                    <td>
-                        <select name="max_links_display">
-                            <?php for ( $i = 1; $i <= 5; $i++ ) : ?>
-                                <option value="<?php echo esc_attr( $i ); ?>"<?php selected( $settings['max_links_display'], $i ); ?>><?php echo esc_html( $i ); ?></option>
-                            <?php endfor; ?>
-                        </select>
-                        <p class="description"><?php esc_html_e( 'Choose how many affiliate links to show on this page (limited to 5 in free version).', 'wbuild-affiliate-links-sidebar' ); ?></p>
-                    </td>
-                </tr>
-            </table>
-
-            <h2><?php esc_html_e( 'Credit', 'wbuild-affiliate-links-sidebar' ); ?></h2>
-            <table class="form-table">
-                <tr>
-                    <th scope="row"><?php esc_html_e( 'Credit Location', 'wbuild-affiliate-links-sidebar' ); ?></th>
-                    <td>
-                        <label><input type="radio" name="credit_location" value="none" <?php checked( $settings['credit_location'], 'none' ); ?>> <?php esc_html_e( 'Never', 'wbuild-affiliate-links-sidebar' ); ?></label><br>
-                        <label><input type="radio" name="credit_location" value="sidebar" <?php checked( $settings['credit_location'], 'sidebar' ); ?>> <?php esc_html_e( 'Sidebar widget only', 'wbuild-affiliate-links-sidebar' ); ?></label><br>
-                        <label><input type="radio" name="credit_location" value="shortcode" <?php checked( $settings['credit_location'], 'shortcode' ); ?>> <?php esc_html_e( 'Shortcode block only', 'wbuild-affiliate-links-sidebar' ); ?></label><br>
-                        <label><input type="radio" name="credit_location" value="both" <?php checked( $settings['credit_location'], 'both' ); ?>> <?php esc_html_e( 'Both', 'wbuild-affiliate-links-sidebar' ); ?></label>
-                        <p class="description"><?php esc_html_e( 'Shows a small "Powered by wBuild.dev" credit linking to the plugin page. Opt-in only. Defaults to never.', 'wbuild-affiliate-links-sidebar' ); ?></p>
-                    </td>
-                </tr>
-            </table>
-
-            <h2><?php esc_html_e( 'Shortcode Visibility', 'wbuild-affiliate-links-sidebar' ); ?></h2>
-            <table class="form-table">
-                <tr>
-                    <th scope="row"><?php esc_html_e( 'Hide shortcode on desktop', 'wbuild-affiliate-links-sidebar' ); ?></th>
+                    <th scope="row"><?php 
+        esc_html_e( 'Hide shortcode on desktop', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
                     <td>
                         <label>
-                            <input type="checkbox" name="hide_shortcode_on_desktop" value="1" <?php checked( $settings['hide_shortcode_on_desktop'], 1 ); ?>>
-                            <?php esc_html_e( 'Hide shortcode block completely on desktop (show only on mobile/tablet)', 'wbuild-affiliate-links-sidebar' ); ?>
+                            <input type="checkbox" name="hide_shortcode_on_desktop" value="1" <?php 
+        checked( $settings['hide_shortcode_on_desktop'], 1 );
+        ?>>
+                            <?php 
+        esc_html_e( 'Hide shortcode block completely on desktop (show only on mobile/tablet)', 'wbuild-affiliate-links-sidebar' );
+        ?>
                         </label>
-                        <p class="description"><?php esc_html_e( 'Useful when using sidebar widget on desktop and shortcode on mobile.', 'wbuild-affiliate-links-sidebar' ); ?></p>
+                        <p class="description"><?php 
+        esc_html_e( 'Useful when using sidebar widget on desktop and shortcode on mobile.', 'wbuild-affiliate-links-sidebar' );
+        ?></p>
                     </td>
                 </tr>
             </table>
 
-            <h2><?php esc_html_e( 'Custom CSS', 'wbuild-affiliate-links-sidebar' ); ?></h2>
+            <!-- ========== CUSTOM CSS ========== -->
+            <h2><?php 
+        esc_html_e( 'Custom CSS', 'wbuild-affiliate-links-sidebar' );
+        ?></h2>
             <table class="form-table">
                 <tr>
-                    <th scope="row"><?php esc_html_e( 'Widget CSS', 'wbuild-affiliate-links-sidebar' ); ?></th>
+                    <th scope="row"><?php 
+        esc_html_e( 'Widget CSS', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
                     <td>
-                        <textarea name="sidebar_css" rows="8" class="widefat"><?php echo esc_textarea( $settings['sidebar_css'] ?: $default_widget_css ); ?></textarea>
-                        <p><button type="button" class="button" onclick="document.querySelector('[name=\'sidebar_css\']').value = '<?php echo esc_js( addslashes( $default_widget_css ) ); ?>';"><?php esc_html_e( 'Reset to Default', 'wbuild-affiliate-links-sidebar' ); ?></button></p>
+                        <textarea name="sidebar_css" rows="8" class="widefat"><?php 
+        echo esc_textarea( ( $settings['sidebar_css'] ?: $default_widget_css ) );
+        ?></textarea>
+                        <p><button type="button" class="button" onclick="document.querySelector('[name=\'sidebar_css\']').value = '<?php 
+        echo esc_js( addslashes( $default_widget_css ) );
+        ?>';"><?php 
+        esc_html_e( 'Reset to Default', 'wbuild-affiliate-links-sidebar' );
+        ?></button></p>
                     </td>
                 </tr>
                 <tr>
-                    <th scope="row"><?php esc_html_e( 'Shortcode CSS', 'wbuild-affiliate-links-sidebar' ); ?></th>
+                    <th scope="row"><?php 
+        esc_html_e( 'Shortcode CSS', 'wbuild-affiliate-links-sidebar' );
+        ?></th>
                     <td>
-                        <textarea name="shortcode_css" rows="8" class="widefat"><?php echo esc_textarea( $settings['shortcode_css'] ?: $default_shortcode_css ); ?></textarea>
-                        <p><button type="button" class="button" onclick="document.querySelector('[name=\'shortcode_css\']').value = '<?php echo esc_js( addslashes( $default_shortcode_css ) ); ?>';"><?php esc_html_e( 'Reset to Default', 'wbuild-affiliate-links-sidebar' ); ?></button></p>
+                        <textarea name="shortcode_css" rows="8" class="widefat"><?php 
+        echo esc_textarea( ( $settings['shortcode_css'] ?: $default_shortcode_css ) );
+        ?></textarea>
+                        <p><button type="button" class="button" onclick="document.querySelector('[name=\'shortcode_css\']').value = '<?php 
+        echo esc_js( addslashes( $default_shortcode_css ) );
+        ?>';"><?php 
+        esc_html_e( 'Reset to Default', 'wbuild-affiliate-links-sidebar' );
+        ?></button></p>
                     </td>
                 </tr>
             </table>
 
-            <h2><?php esc_html_e( 'Like this plugin?', 'wbuild-affiliate-links-sidebar' ); ?></h2>
-            <p style="font-size: 1.1em;">
-                <?php esc_html_e( 'The Pro version adds unlimited links, multiple affiliate programs, and more custom behaviors.', 'wbuild-affiliate-links-sidebar' ); ?><br>
-                <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener"><?php esc_html_e( 'View Pro details →', 'wbuild-affiliate-links-sidebar' ); ?></a>
-            </p>
+            <!-- ========== UPGRADE / SUPPORT ========== -->
+            <?php 
+        if ( !$is_pro ) {
+            ?>
+                <h2><?php 
+            esc_html_e( 'Like this plugin?', 'wbuild-affiliate-links-sidebar' );
+            ?></h2>
+                <div class="wbuild-als-pro-upsell">
+                    <p style="font-size: 1.1em; margin: 0;">
+                        <?php 
+            esc_html_e( 'The Pro version adds unlimited links, multiple affiliate programs, and more.', 'wbuild-affiliate-links-sidebar' );
+            ?><br>
+                        <a href="<?php 
+            echo esc_url( wals_fs()->get_upgrade_url() );
+            ?>"><?php 
+            esc_html_e( 'Upgrade to Pro Now', 'wbuild-affiliate-links-sidebar' );
+            ?> &rarr;</a>
+                    </p>
+                </div>
+            <?php 
+        } else {
+            ?>
+                <h2><?php 
+            esc_html_e( 'Support Development', 'wbuild-affiliate-links-sidebar' );
+            ?></h2>
+                <p style="font-size: 1.1em;">
+                    <?php 
+            esc_html_e( 'Thank you for using the Pro version!', 'wbuild-affiliate-links-sidebar' );
+            ?><br>
+                    <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener"><?php 
+            esc_html_e( 'View Plugin Page', 'wbuild-affiliate-links-sidebar' );
+            ?> &rarr;</a>
+                </p>
+            <?php 
+        }
+        ?>
 
-            <?php submit_button( __( 'Save Settings', 'wbuild-affiliate-links-sidebar' ), 'primary', 'wbuild_als_submit' ); ?>
+            <?php 
+        submit_button( __( 'Save Settings', 'wbuild-affiliate-links-sidebar' ), 'primary', 'wbuild_als_submit' );
+        ?>
         </form>
     </div>
-    <?php
-}
-
-// ============================================================
-// WIDGET
-// ============================================================
-class WBuild_Affiliate_Links_Widget extends WP_Widget {
-    public function __construct() {
-        parent::__construct(
-            'wbuild_als_widget',
-            'wBuild Affiliate Links Sidebar (Free)',
-            array( 'description' => __( 'Shows affiliate links from page content using global prefix (limited to 5 in free).', 'wbuild-affiliate-links-sidebar' ) )
-        );
+    <?php 
     }
 
-    public function widget( $args, $instance ) {
-        if ( ! is_singular() ) {
-            return;
+    // ============================================================
+    // SHARED HELPER: Get affiliate links from content
+    // ============================================================
+    function wbuild_als_get_links_from_content(  $content  ) {
+        $settings = get_option( 'wbuild_als_settings', array() );
+        $is_pro = wbuild_als_is_pro();
+        // Build the list of prefixes to scan.
+        $prefixes = array();
+        // Fallback / Free: single prefix.
+        if ( empty( $prefixes ) ) {
+            $prefixes = array($settings['prefix'] ?? 'https://amzn.to/');
+        }
+        $all_links = array();
+        foreach ( $prefixes as $prefix ) {
+            $prefix = rtrim( $prefix, '/ ' );
+            if ( empty( $prefix ) ) {
+                continue;
+            }
+            $pattern = '/(' . preg_quote( $prefix, '/' ) . '\\/[^\\s<>"\']+)/i';
+            preg_match_all( $pattern, $content, $m );
+            $all_links = array_merge( $all_links, $m[1] ?? array() );
+        }
+        $links = array_values( array_unique( $all_links ) );
+        if ( empty( $links ) ) {
+            return array();
+        }
+        // Apply link limits.
+        $max = (int) ($settings['max_links_display'] ?? 5);
+        // Free: hard cap 1-5.
+        $max = max( 1, min( 5, $max ) );
+        $links = array_slice( $links, 0, $max );
+        return $links;
+    }
+
+    /**
+     * Extract anchor text for a given link from content HTML.
+     */
+    function wbuild_als_get_link_text(  $content, $link  ) {
+        $escaped = preg_quote( $link, '/' );
+        preg_match( '/<a\\s+[^>]*href=["\']' . $escaped . '["\'][^>]*>(.*?)<\\/a>/is', $content, $m );
+        return ( !empty( $m[1] ) ? wp_strip_all_tags( $m[1] ) : '' );
+    }
+
+    /**
+     * Build rel attribute parts from settings.
+     */
+    function wbuild_als_get_rel_parts() {
+        $settings = get_option( 'wbuild_als_settings', array() );
+        $rel_parts = array();
+        if ( !empty( $settings['link_rel_sponsored'] ) ) {
+            $rel_parts[] = 'sponsored';
+        }
+        if ( !empty( $settings['link_rel_nofollow'] ) ) {
+            $rel_parts[] = 'nofollow';
+        }
+        if ( !empty( $settings['link_rel_noopener'] ) && !empty( $settings['link_new_tab'] ) ) {
+            $rel_parts[] = 'noopener';
+        }
+        return $rel_parts;
+    }
+
+    // ============================================================
+    // WIDGET
+    // ============================================================
+    class WBuild_Affiliate_Links_Widget extends WP_Widget {
+        public function __construct() {
+            $is_pro = wbuild_als_is_pro();
+            parent::__construct( 'wbuild_als_widget', ( $is_pro ? 'wBuild Affiliate Links Sidebar (Pro)' : 'wBuild Affiliate Links Sidebar (Free)' ), array(
+                'description' => ( $is_pro ? __( 'Shows affiliate links from page content - unlimited links, multiple prefixes.', 'wbuild-affiliate-links-sidebar' ) : __( 'Shows affiliate links from page content using global prefix (limited to 5 in free).', 'wbuild-affiliate-links-sidebar' ) ),
+            ) );
         }
 
-        if ( ! empty( $instance['desktop_only'] ) && wp_is_mobile() ) {
-            return;
+        public function widget( $args, $instance ) {
+            if ( !is_singular() ) {
+                return;
+            }
+            if ( !empty( $instance['desktop_only'] ) && wp_is_mobile() ) {
+                return;
+            }
+            global $post;
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress hook
+            $content = apply_filters( 'the_content', $post->post_content );
+            $links = wbuild_als_get_links_from_content( $content );
+            if ( empty( $links ) ) {
+                return;
+            }
+            $settings = get_option( 'wbuild_als_settings', array() );
+            $title = ( !empty( $instance['title'] ) ? $instance['title'] : $settings['widget_title'] ?? 'Recommended Products on Page' );
+            $rel_parts = wbuild_als_get_rel_parts();
+            $class = 'affiliate-links-widget';
+            if ( !empty( $instance['desktop_only'] ) ) {
+                $class .= ' desktop-only';
+            }
+            $target = ( !empty( $settings['link_new_tab'] ) ? ' target="_blank"' : '' );
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
+            echo $args['before_widget'];
+            echo '<div class="' . esc_attr( $class ) . '">';
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
+            echo $args['before_title'] . esc_html( $title ) . $args['after_title'];
+            echo '<ul>';
+            foreach ( $links as $link ) {
+                $text = wbuild_als_get_link_text( $content, $link );
+                $display = ( $text ?: str_replace( array('https://', 'http://'), '', $link ) );
+                printf(
+                    '<li><a href="%s"%s%s>%s</a></li>',
+                    esc_url( $link ),
+                    ( $target ? ' target="' . esc_attr( '_blank' ) . '"' : '' ),
+                    ( $rel_parts ? ' rel="' . esc_attr( implode( ' ', $rel_parts ) ) . '"' : '' ),
+                    esc_html( $display )
+                );
+            }
+            echo '</ul>';
+            if ( !empty( $settings['disclosure'] ) ) {
+                echo '<p class="affiliate-disclosure">' . wp_kses_post( $settings['disclosure'] ) . '</p>';
+            }
+            if ( in_array( $settings['credit_location'] ?? 'none', array('sidebar', 'both'), true ) ) {
+                echo '<p class="wbuild-als-credit">' . wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array(
+                    'a' => array(
+                        'href'   => array(),
+                        'target' => array(),
+                        'rel'    => array(),
+                    ),
+                ) ) . '</p>';
+            }
+            echo '</div>';
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
+            echo $args['after_widget'];
         }
 
+        public function form( $instance ) {
+            $title = $instance['title'] ?? '';
+            $desktop_only = !empty( $instance['desktop_only'] );
+            ?>
+        <p>
+            <label for="<?php 
+            echo esc_attr( $this->get_field_id( 'title' ) );
+            ?>"><?php 
+            esc_html_e( 'Widget Title (overrides global)', 'wbuild-affiliate-links-sidebar' );
+            ?></label>
+            <input class="widefat" id="<?php 
+            echo esc_attr( $this->get_field_id( 'title' ) );
+            ?>" name="<?php 
+            echo esc_attr( $this->get_field_name( 'title' ) );
+            ?>" type="text" value="<?php 
+            echo esc_attr( $title );
+            ?>">
+        </p>
+        <p>
+            <input type="checkbox" id="<?php 
+            echo esc_attr( $this->get_field_id( 'desktop_only' ) );
+            ?>" name="<?php 
+            echo esc_attr( $this->get_field_name( 'desktop_only' ) );
+            ?>" value="1" <?php 
+            checked( $desktop_only );
+            ?>>
+            <label for="<?php 
+            echo esc_attr( $this->get_field_id( 'desktop_only' ) );
+            ?>"><?php 
+            esc_html_e( 'Show only on desktop (hide on mobile/tablet)', 'wbuild-affiliate-links-sidebar' );
+            ?></label>
+        </p>
+        <p style="font-size:0.9em; color:#555;">
+            <?php 
+            printf( wp_kses( 
+                /* translators: %s: URL to the plugin settings page */
+                __( 'All settings: <a href="%s">Settings > wBuild Affiliate Sidebar</a>', 'wbuild-affiliate-links-sidebar' ),
+                array(
+                    'a' => array(
+                        'href' => array(),
+                    ),
+                )
+             ), esc_url( admin_url( 'options-general.php?page=wbuild-affiliate-links-sidebar' ) ) );
+            ?>
+        </p>
+        <?php 
+        }
+
+        public function update( $new_instance, $old_instance ) {
+            return array(
+                'title'        => wp_strip_all_tags( $new_instance['title'] ?? '' ),
+                'desktop_only' => ( !empty( $new_instance['desktop_only'] ) ? 1 : 0 ),
+            );
+        }
+
+    }
+
+    // ============================================================
+    // SHORTCODE
+    // ============================================================
+    function wbuild_als_shortcode() {
+        if ( !is_singular() ) {
+            return '';
+        }
+        $settings = get_option( 'wbuild_als_settings', array() );
+        if ( !empty( $settings['hide_shortcode_on_desktop'] ) && !wp_is_mobile() ) {
+            return '';
+        }
+        static $in_progress = false;
+        if ( $in_progress ) {
+            return '';
+        }
+        $in_progress = true;
         global $post;
         // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress hook
         $content = apply_filters( 'the_content', $post->post_content );
-
-        $settings = get_option( 'wbuild_als_settings', array() );
-        $prefix = rtrim( $settings['prefix'] ?? 'https://amzn.to', '/' );
-        $pattern = '/(' . preg_quote( $prefix, '/' ) . '\/[^\s<>"\']+)/i';
-        preg_match_all( $pattern, $content, $matches );
-        $links = array_unique( $matches[1] ?? array() );
+        $links = wbuild_als_get_links_from_content( $content );
         if ( empty( $links ) ) {
-            return;
+            $in_progress = false;
+            return '';
         }
-
-        $max_display = ! empty( $settings['max_links_display'] ) ? max( 1, min( 5, (int) $settings['max_links_display'] ) ) : 5;
-        $links = array_slice( $links, 0, $max_display );
-
-        $title = ! empty( $instance['title'] ) ? $instance['title'] : ( $settings['widget_title'] ?? 'Recommended Products on Page' );
-
-        $class = 'affiliate-links-widget';
-        if ( ! empty( $instance['desktop_only'] ) ) {
-            $class .= ' desktop-only';
-        }
-
-        $target = ! empty( $settings['link_new_tab'] ) ? ' target="_blank"' : '';
-        $rel_parts = array();
-        if ( ! empty( $settings['link_rel_sponsored'] ) ) {
-            $rel_parts[] = 'sponsored';
-        }
-        if ( ! empty( $settings['link_rel_nofollow'] ) ) {
-            $rel_parts[] = 'nofollow';
-        }
-        if ( ! empty( $settings['link_rel_noopener'] ) && ! empty( $settings['link_new_tab'] ) ) {
-            $rel_parts[] = 'noopener';
-        }
-
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
-        echo $args['before_widget'];
-        echo '<div class="' . esc_attr( $class ) . '">';
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
-        echo $args['before_title'] . esc_html( $title ) . $args['after_title'];
-        echo '<ul>';
-        foreach ( $links as $link ) {
-            $text = $this->get_link_text( $content, $link );
-            $display = $text ?: str_replace( array( 'https://', 'http://' ), '', $link );
-            printf(
-                '<li><a href="%s"%s%s>%s</a></li>',
-                esc_url( $link ),
-                $target ? ' target="' . esc_attr( '_blank' ) . '"' : '',
-                $rel_parts ? ' rel="' . esc_attr( implode( ' ', $rel_parts ) ) . '"' : '',
-                esc_html( $display )
-            );
-        }
-        echo '</ul>';
-        if ( ! empty( $settings['disclosure'] ) ) {
-            echo '<p class="affiliate-disclosure">' . wp_kses_post( $settings['disclosure'] ) . '</p>';
-        }
-        if ( in_array( $settings['credit_location'] ?? 'none', array( 'sidebar', 'both' ), true ) ) {
-            echo '<p class="wbuild-als-credit">' . wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ) . '</p>';
-        }
-        echo '</div>';
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Core widget args; escaping would break HTML structure
-        echo $args['after_widget'];
-    }
-
-    private function get_link_text( $content, $link ) {
-        $escaped = preg_quote( $link, '/' );
-        preg_match( '/<a\s+[^>]*href=["\']' . $escaped . '["\'][^>]*>(.*?)<\/a>/is', $content, $m );
-        return ! empty( $m[1] ) ? wp_strip_all_tags( $m[1] ) : '';
-    }
-
-    public function form( $instance ) {
-        $title = $instance['title'] ?? '';
-        $desktop_only = ! empty( $instance['desktop_only'] );
+        $title = $settings['shortcode_title'] ?? 'Recommended Products on Page';
+        $rel_parts = wbuild_als_get_rel_parts();
+        ob_start();
         ?>
-        <p>
-            <label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>"><?php esc_html_e( 'Widget Title (overrides global)', 'wbuild-affiliate-links-sidebar' ); ?></label>
-            <input class="widefat" id="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>" name="<?php echo esc_attr( $this->get_field_name( 'title' ) ); ?>" type="text" value="<?php echo esc_attr( $title ); ?>">
-        </p>
-        <p>
-            <input type="checkbox" id="<?php echo esc_attr( $this->get_field_id( 'desktop_only' ) ); ?>" name="<?php echo esc_attr( $this->get_field_name( 'desktop_only' ) ); ?>" value="1" <?php checked( $desktop_only ); ?>>
-            <label for="<?php echo esc_attr( $this->get_field_id( 'desktop_only' ) ); ?>"><?php esc_html_e( 'Show only on desktop (hide on mobile/tablet)', 'wbuild-affiliate-links-sidebar' ); ?></label>
-        </p>
-        <p style="font-size:0.9em; color:#555;">
-            <?php
-            printf(
-                wp_kses(
-                    /* translators: %s: URL to the plugin settings page */
-                    __( 'All settings: <a href="%s">Settings → wBuild Affiliate Sidebar</a>', 'wbuild-affiliate-links-sidebar' ),
-                    array( 'a' => array( 'href' => array() ) )
-                ),
-                esc_url( admin_url( 'options-general.php?page=wbuild-affiliate-links-sidebar' ) )
-            );
-            ?>
-        </p>
-        <?php
-    }
-
-    public function update( $new_instance, $old_instance ) {
-        return array(
-            'title'        => wp_strip_all_tags( $new_instance['title'] ?? '' ),
-            'desktop_only' => ! empty( $new_instance['desktop_only'] ) ? 1 : 0,
-        );
-    }
-}
-
-// ============================================================
-// SHORTCODE
-// ============================================================
-function wbuild_als_shortcode() {
-    if ( ! is_singular() ) {
-        return '';
-    }
-
-    $settings = get_option( 'wbuild_als_settings', array() );
-
-    if ( ! empty( $settings['hide_shortcode_on_desktop'] ) && ! wp_is_mobile() ) {
-        return '';
-    }
-
-    static $in_progress = false;
-    if ( $in_progress ) {
-        return '';
-    }
-    $in_progress = true;
-
-    global $post;
-    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress hook
-    $content = apply_filters( 'the_content', $post->post_content );
-
-    $prefix = rtrim( $settings['prefix'] ?? 'https://amzn.to', '/' );
-    $pattern = '/(' . preg_quote( $prefix, '/' ) . '\/[^\s<>"\']+)/i';
-    preg_match_all( $pattern, $content, $matches );
-    $links = array_unique( $matches[1] ?? array() );
-
-    if ( empty( $links ) ) {
-        $in_progress = false;
-        return '';
-    }
-
-    $max_display = ! empty( $settings['max_links_display'] ) ? max( 1, min( 5, (int) $settings['max_links_display'] ) ) : 5;
-    $links = array_slice( $links, 0, $max_display );
-
-    $title = $settings['shortcode_title'] ?? 'Recommended Products on Page';
-
-    $rel_parts = array();
-    if ( ! empty( $settings['link_rel_sponsored'] ) ) {
-        $rel_parts[] = 'sponsored';
-    }
-    if ( ! empty( $settings['link_rel_nofollow'] ) ) {
-        $rel_parts[] = 'nofollow';
-    }
-    if ( ! empty( $settings['link_rel_noopener'] ) && ! empty( $settings['link_new_tab'] ) ) {
-        $rel_parts[] = 'noopener';
-    }
-
-    ob_start();
-    ?>
     <div class="affiliate-links-shortcode">
-        <h4><?php echo esc_html( $title ); ?></h4>
+        <h4><?php 
+        echo esc_html( $title );
+        ?></h4>
         <ul>
-            <?php foreach ( $links as $link ) :
-                $text = '';
-                $escaped = preg_quote( $link, '/' );
-                preg_match( '/<a\s+[^>]*href=["\']' . $escaped . '["\'][^>]*>(.*?)<\/a>/is', $content, $m );
-                if ( ! empty( $m[1] ) ) {
-                    $text = wp_strip_all_tags( $m[1] );
-                }
-                $display = $text ?: str_replace( array( 'https://', 'http://' ), '', $link );
+            <?php 
+        foreach ( $links as $link ) {
+            $text = wbuild_als_get_link_text( $content, $link );
+            $display = ( $text ?: str_replace( array('https://', 'http://'), '', $link ) );
             ?>
-                <li><a href="<?php echo esc_url( $link ); ?>"<?php
-                    if ( ! empty( $settings['link_new_tab'] ) ) {
-                        echo ' target="' . esc_attr( '_blank' ) . '"';
-                    }
-                    if ( $rel_parts ) {
-                        echo ' rel="' . esc_attr( implode( ' ', $rel_parts ) ) . '"';
-                    }
-                ?>><?php echo esc_html( $display ); ?></a></li>
-            <?php endforeach; ?>
+                <li><a href="<?php 
+            echo esc_url( $link );
+            ?>"<?php 
+            if ( !empty( $settings['link_new_tab'] ) ) {
+                echo ' target="' . esc_attr( '_blank' ) . '"';
+            }
+            if ( $rel_parts ) {
+                echo ' rel="' . esc_attr( implode( ' ', $rel_parts ) ) . '"';
+            }
+            ?>><?php 
+            echo esc_html( $display );
+            ?></a></li>
+            <?php 
+        }
+        ?>
         </ul>
-        <?php if ( ! empty( $settings['disclosure'] ) ) : ?>
-            <p class="affiliate-disclosure"><?php echo wp_kses_post( $settings['disclosure'] ); ?></p>
-        <?php endif; ?>
-        <?php if ( in_array( $settings['credit_location'] ?? 'none', array( 'shortcode', 'both' ), true ) ) : ?>
-            <p class="wbuild-als-credit"><?php echo wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) ) ); ?></p>
-        <?php endif; ?>
+        <?php 
+        if ( !empty( $settings['disclosure'] ) ) {
+            ?>
+            <p class="affiliate-disclosure"><?php 
+            echo wp_kses_post( $settings['disclosure'] );
+            ?></p>
+        <?php 
+        }
+        ?>
+        <?php 
+        if ( in_array( $settings['credit_location'] ?? 'none', array('shortcode', 'both'), true ) ) {
+            ?>
+            <p class="wbuild-als-credit"><?php 
+            echo wp_kses( __( 'Powered by <a href="https://wbuild.dev/affiliate-links-sidebar/" target="_blank" rel="noopener">wBuild.dev</a>', 'wbuild-affiliate-links-sidebar' ), array(
+                'a' => array(
+                    'href'   => array(),
+                    'target' => array(),
+                    'rel'    => array(),
+                ),
+            ) );
+            ?></p>
+        <?php 
+        }
+        ?>
     </div>
-    <?php
-    $in_progress = false;
-    return ob_get_clean();
-}
-add_shortcode( 'wbuild-affiliate-links', 'wbuild_als_shortcode' );
+    <?php 
+        $in_progress = false;
+        return ob_get_clean();
+    }
 
-// ============================================================
-// REGISTER WIDGET
-// ============================================================
-add_action( 'widgets_init', function () {
-    register_widget( 'WBuild_Affiliate_Links_Widget' );
-} );
+    add_shortcode( 'wbuild-affiliate-links', 'wbuild_als_shortcode' );
+    // ============================================================
+    // REGISTER WIDGET
+    // ============================================================
+    add_action( 'widgets_init', function () {
+        register_widget( 'WBuild_Affiliate_Links_Widget' );
+    } );
+}
+// End of else block (Freemius auto-deactivation wrapper).

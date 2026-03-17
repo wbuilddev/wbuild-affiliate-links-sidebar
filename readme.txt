@@ -4,7 +4,7 @@ Tags: affiliate, amazon, links, shortcode, sidebar
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.7.1
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,15 @@ Yes — use the Custom CSS fields in settings, or override the classes `.affilia
 
 == Changelog ==
 
+= 1.8.0 =
+* Integrated Freemius SDK for in-dashboard upgrades, licensing, and Pro delivery
+* Merged free and Pro codebases into a single plugin with feature gating
+* Pro features (unlimited links, multiple prefixes) now unlock via Freemius license or trial
+* Added upgrade CTA in settings page for free users
+* Added Pro badge on settings page for paying users
+* Refactored link extraction and display limits into shared helper functions
+* Added auto-deactivation support for seamless free-to-Pro version switching
+
 = 1.7.1 =
 * Security: CSS fields (sidebar_css, shortcode_css) now sanitized with wp_strip_all_tags() on save
 * Security: Individual $_POST keys accessed directly instead of processing entire $_POST array
@@ -136,6 +145,9 @@ Yes — use the Custom CSS fields in settings, or override the classes `.affilia
 * Single prefix support, basic styling, disclosure field
 
 == Upgrade Notice ==
+
+= 1.8.0 =
+Freemius integration added for seamless in-dashboard upgrades to Pro. Free features unchanged. Pro users get unlimited links and multiple affiliate prefixes.
 
 = 1.7.1 =
 Security and standards fixes: proper input sanitization, individual $_POST access, validated options, and prefixed shortcode name. **Breaking change:** shortcode is now `[wbuild-affiliate-links]` — update any existing shortcode blocks.
